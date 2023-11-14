@@ -35,10 +35,24 @@ RUN git clone https://github.com/sremes/bitsandbytes-rocm.git && \
     ROCM_HOME=/opt/rocm ROCM_TARGET=${ROCM_TARGET} make hip && \
     pip install .
 
-# Install pytorch (nightly) and transformers+peft
+# Install pytorch (nightly) and transformers+peft, etc.
 RUN pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm5.7 && rm -rf /root/.cache
-RUN pip install git+https://github.com/huggingface/transformers git+https://github.com/huggingface/peft scipy tensorboard && rm -rf /root/.cache
 
+ENV PATH="$HOME/.cargo/bin:$PATH"
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && cd /opt && git clone https://github.com/huggingface/tokenizers \
+    && cd tokenizers/bindings/python \
+    && pip install . && rm -rf /root/.cache
+
+RUN pip install git+https://github.com/huggingface/transformers \
+    git+https://github.com/huggingface/peft \
+    git+https://github.com/huggingface/accelerate.git \
+    git+https://github.com/huggingface/datasets.git \
+    git+https://github.com/huggingface/diffusers.git \
+    git+https://github.com/Lightning-AI/lightning.git \
+    scipy tensorboard pandas ipython \
+    && rm -rf /root/.cache
 
 WORKDIR /app
 CMD [ "/bin/bash", "-l" ]
