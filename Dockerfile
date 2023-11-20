@@ -3,8 +3,8 @@ FROM ubuntu:22.04
 # Register the ROCM package repository, and install rocm-dev package
 ENV HSA_OVERRIDE_GFX_VERSION=11.0.0
 ARG ROCM_TARGET=gfx1100
-ARG ROCM_VERSION=5.7.1
-ARG AMDGPU_VERSION=5.7.1
+ARG ROCM_VERSION=5.7.2
+ARG AMDGPU_VERSION=5.7.2
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
