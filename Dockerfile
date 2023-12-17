@@ -1,8 +1,8 @@
 FROM ubuntu:22.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=5.7.3
-ARG AMDGPU_VERSION=5.7.3
+ARG ROCM_VERSION=6.0
+ARG AMDGPU_VERSION=6.0
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
