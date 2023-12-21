@@ -33,7 +33,7 @@ RUN pip install -U pip
 RUN pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm5.7 \
     && rm -rf /opt/venv/lib/${PYTHON_VERSION}/site-packages/torch/lib/{libMIOpen.so,libamd*,libdrm*,libhip*,libhsa-runtime64.so,libr*,rocblas,libelf.so,libgomp.so,libnuma.so} \
     && rm -rf /opt/venv/lib/${PYTHON_VERSION}/site-packages/triton/third_party/hip/lib/{libamd*,libdrm*,libhsa-runtime64.so,libnuma.so,libelf.so} \
-    && ln -sf /opt/rocm/hip/lib/libamdhip64.so /opt/venv/lib/${PYTHON_VERSION}/site-packages/triton/third_party/hip/lib/ \
+    && ln -sf /opt/rocm/lib/libamdhip64.so /opt/venv/lib/${PYTHON_VERSION}/site-packages/triton/third_party/hip/lib/ \
     && ln -sf /usr/lib/x86_64-linux-gnu/libgomp.so.1 /opt/venv/lib/${PYTHON_VERSION}/site-packages/torch/lib/libgomp.so
 
 # Select and enforce the ROCm gfx version
