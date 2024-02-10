@@ -109,5 +109,9 @@ RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git
     && git apply /opt/patch_flash_attn_arch.patch \
     && pip install -e . && rm -rf /root/.cache
 
+# Build also torchvision
+RUN cd /opt && git clone https://github.com/pytorch/vision.git \
+    && cd vision && pip install . && rm -rf /root/.cache
+
 WORKDIR /app
 CMD [ "/bin/bash", "-l" ]
