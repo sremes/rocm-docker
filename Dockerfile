@@ -97,5 +97,17 @@ RUN pip install --no-cache-dir \
     scipy tensorboard pandas ipython \
     && rm -rf /root/.cache
 
+# Build Triton
+RUN cd /opt && git clone https://github.com/ROCm/triton.git \
+    && cd triton/python && pip install -e . && rm -rf /root/.cache
+
+# Build Flash-Attention
+ENV GPU_ARCHS="gfx1100"
+COPY patch_flash_attn_arch.patch /opt
+RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git \
+    && cd flash-attention && git checkout howiejay/navi_support \
+    && git apply /opt/patch_flash_attn_arch.patch \
+    && pip install -e . && rm -rf /root/.cache
+
 WORKDIR /app
 CMD [ "/bin/bash", "-l" ]

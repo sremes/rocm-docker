@@ -1,0 +1,22 @@
+diff --git a/setup.py b/setup.py
+index 8a12b32..41ded77 100644
+--- a/setup.py
++++ b/setup.py
+@@ -257,16 +257,7 @@ def get_gpu_arch():
+     Returns:
+         _type_: None
+     """
+-    try:
+-        # Use rocminfo or lspci command to get GPU info
+-        output = subprocess.check_output(["rocminfo"], universal_newlines=True)
+-        # Match the GPU architecture using regex
+-        match = re.search(r"gfx9\d+", output) or re.search(r"gfx11\d+", output)
+-        if match:
+-            return match.group(0)
+-    except Exception as e:
+-        print(f"Error detecting GPU architecture: {e}")
+-        return None
++    return "gfx1100"
+
+
+ def set_cc_flag():
