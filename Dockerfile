@@ -16,11 +16,11 @@ RUN apt-get update \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install python and git + other tools
-ARG PYTHON_VERSION=python3.12
+ARG PYTHON_VERSION=python3.11
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${PYTHON_VERSION} ${PYTHON_VERSION}-venv ${PYTHON_VERSION}-dev \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Intel MKL
@@ -111,7 +111,17 @@ RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git
 
 # Build also torchvision
 RUN cd /opt && git clone https://github.com/pytorch/vision.git \
-    && cd vision && pip install . && rm -rf /root/.cache
+    && cd vision && python setup.py install && rm -rf /root/.cache
+
+# Add non-root user
+ARG USERNAME=user
+ARG USER_UID=1000
+ARG USER_GID=100
+RUN groupadd -f --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+USER $USERNAME
 
 WORKDIR /app
 CMD [ "/bin/bash", "-l" ]
