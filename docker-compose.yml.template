@@ -1,16 +1,22 @@
 services:
   rocm:
-    build: .
+    build: 
+      context: .
+      #args:
+      #  USERNAME: username-to-use-inside-docker
+    image: ghcr.io/sremes/rocm-docker:nightly
     volumes:
-      - XXX:/app
-      - YYY:/datasets
-      - ZZZ:/cache
+      # volumes, e.g.
+      - /datasets:/datasets
     devices:
+      # AMD devices for ROCm
       - "/dev/kfd"
       - "/dev/dri"
     shm_size: 16G
-    ipc: host
+    # to access services in docker from host
+    network_mode: host
     ports:
+      # forwarding for e.g. tensorboard or something
       - 7860:7860
     cap_add:
       - SYS_PTRACE
@@ -19,5 +25,4 @@ services:
     group_add:
       - video
     environment:
-      - TRANSFORMERS_CACHE=/cache
-      - HUGGING_FACE_HUB_TOKEN=ZZZ
+      - LC_ALL=C.UTF-8

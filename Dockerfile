@@ -1,8 +1,8 @@
 FROM ubuntu:22.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=6.0.2
-ARG AMDGPU_VERSION=6.0.2
+ARG ROCM_VERSION=6.1
+ARG AMDGPU_VERSION=6.1
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
@@ -20,7 +20,7 @@ ARG PYTHON_VERSION=python3.11
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${PYTHON_VERSION} ${PYTHON_VERSION}-venv ${PYTHON_VERSION}-dev \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Intel MKL
@@ -39,8 +39,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install -U pip
 
 # Select and enforce the ROCm gfx version
-ENV HSA_OVERRIDE_GFX_VERSION=11.0.0
-ARG ROCM_TARGET=gfx1100
+ENV HSA_OVERRIDE_GFX_VERSION=11.0.1
+ARG ROCM_TARGET=gfx1101
 
 # Install pytorch (nightly) - remove supplied rocm libraries and force torch and triton to use system versions
 #RUN pip install --no-cache-dir --pre torch --index-url https://download.pytorch.org/whl/nightly/rocm6.0 \
@@ -63,7 +63,7 @@ RUN cd /opt && git clone https://bitbucket.org/icl/magma.git && cd magma && cp m
 # Compile and install pytorch
 ENV USE_LLVM=/opt/rocm/llvm
 ENV LLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm
-ENV PYTORCH_ROCM_ARCH="gfx1100"
+ENV PYTORCH_ROCM_ARCH="gfx1101"
 ENV ROCM_PATH /opt/rocm
 ENV MAGMA_HOME /opt/rocm/magma
 RUN pip install --no-cache-dir -U wheel setuptools
@@ -73,10 +73,10 @@ RUN cd /opt/pytorch && python tools/amd_build/build_amd.py \
     && python setup.py bdist_wheel && pip install --no-index --no-deps "$(echo dist/*.whl)" && rm dist/*.whl
 
 # Compile and install bitsandbytes for ROCm
-RUN cd /opt && git clone https://github.com/sremes/bitsandbytes-rocm.git && \
-    cd bitsandbytes-rocm && \
-    ROCM_HOME=/opt/rocm ROCM_TARGET=${ROCM_TARGET} make hip && \
-    pip install .
+RUN cd /opt && git clone https://github.com/ROCm/bitsandbytes.git \
+    && cd bitsandbytes && git checkout rocm_enabled \
+    && cmake -DCOMPUTE_BACKEND=hip -DBNB_ROCM_ARCH=${ROCM_TARGET} -S . \
+    && make -j8 && pip install .
 
 # Install tokenizers
 ENV PATH="$HOME/.cargo/bin:$PATH"
@@ -88,13 +88,14 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y \
 
 # And finally all other relevant libraries
 RUN pip install --no-cache-dir \
-    git+https://github.com/huggingface/transformers \
-    git+https://github.com/huggingface/peft \
-    git+https://github.com/huggingface/accelerate.git \
-    git+https://github.com/huggingface/datasets.git \
-    git+https://github.com/huggingface/diffusers.git \
+    #git+https://github.com/huggingface/transformers \
+    #git+https://github.com/huggingface/peft \
+    #git+https://github.com/huggingface/accelerate.git \
+    #git+https://github.com/huggingface/datasets.git \
+    #git+https://github.com/huggingface/diffusers.git \
     git+https://github.com/Lightning-AI/lightning.git \
-    scipy tensorboard pandas ipython \
+    transformers peft accelerate datasets diffusers \
+    scipy tensorboard pandas matplotlib ipython pytest black \
     && rm -rf /root/.cache
 
 # Build Triton
@@ -102,7 +103,7 @@ RUN cd /opt && git clone https://github.com/ROCm/triton.git \
     && cd triton/python && pip install -e . && rm -rf /root/.cache
 
 # Build Flash-Attention
-ENV GPU_ARCHS="gfx1100"
+ENV GPU_ARCHS="gfx1101"
 COPY patch_flash_attn_arch.patch /opt
 RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git \
     && cd flash-attention && git checkout howiejay/navi_support \
