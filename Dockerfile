@@ -1,8 +1,8 @@
 FROM ubuntu:22.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=6.1
-ARG AMDGPU_VERSION=6.1
+ARG ROCM_VERSION=6.1.1
+ARG AMDGPU_VERSION=6.1.1
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
@@ -50,11 +50,15 @@ ARG ROCM_TARGET=gfx1101
 #RUN ln -sf /usr/lib/x86_64-linux-gnu/libgomp.so.1 /opt/venv/lib/${PYTHON_VERSION}/site-packages/torch/lib/libgomp.so
 
 # Compile and install magma
-RUN cd /opt && git clone https://bitbucket.org/icl/magma.git && cd magma && cp make.inc-examples/make.inc.hip-gcc-mkl make.inc \
+COPY magma_add_gfx1101.patch /opt
+RUN cd /opt && git clone https://bitbucket.org/icl/magma.git \
+    && cd magma \
+    && git apply /opt/magma_add_gfx1101.patch \
+    && cp make.inc-examples/make.inc.hip-gcc-mkl make.inc \
     && echo 'LIBDIR += -L$(MKLROOT)/lib' | tee -a make.inc \
     && echo 'LIB += -Wl,--enable-new-dtags -Wl,--rpath,/opt/rocm/lib -Wl,--rpath,$(MKLROOT)/lib -Wl,--rpath,/opt/rocm/magma/lib' | tee -a make.inc \
     && echo 'DEVCCFLAGS += --gpu-max-threads-per-block=256' | tee -a make.inc \
-    && echo 'DEVCCFLAGS += --offload-arch=$(ROCM_TARGET)' | tee -a make.inc \
+#    && echo 'DEVCCFLAGS += --offload-arch=$(ROCM_TARGET)' | tee -a make.inc \
     && sed -i 's/^FOPENMP/#FOPENMP/g' make.inc \
     && make -f make.gen.hipMAGMA -j $(nproc) \
     && LANG=C.UTF-8 make lib/libmagma.so -j $(nproc) MKLROOT=${MKLROOT} \
@@ -99,20 +103,25 @@ RUN pip install --no-cache-dir \
     && rm -rf /root/.cache
 
 # Build Triton
-RUN cd /opt && git clone https://github.com/ROCm/triton.git \
-    && cd triton/python && pip install -e . && rm -rf /root/.cache
+#RUN cd /opt && git clone https://github.com/ROCm/triton.git \
+#    && cd triton/python && pip install -e . && rm -rf /root/.cache
+RUN cd /opt && git clone https://github.com/triton-lang/triton.git \
+    && cd triton && pip install -e python && rm -rf /root/.cache
 
 # Build Flash-Attention
-ENV GPU_ARCHS="gfx1101"
-COPY patch_flash_attn_arch.patch /opt
-RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git \
-    && cd flash-attention && git checkout howiejay/navi_support \
-    && git apply /opt/patch_flash_attn_arch.patch \
-    && pip install -e . && rm -rf /root/.cache
+#ENV GPU_ARCHS="gfx1101"
+#COPY patch_flash_attn_arch.patch /opt
+#RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git \
+#    && cd flash-attention && git checkout howiejay/navi_support \
+#    && git apply /opt/patch_flash_attn_arch.patch \
+#    && pip install -e . && rm -rf /root/.cache
 
 # Build also torchvision
 RUN cd /opt && git clone https://github.com/pytorch/vision.git \
     && cd vision && python setup.py install && rm -rf /root/.cache
+
+# Install amd-smi tool, needed by pytorch/triton
+RUN pip install /opt/rocm/share/amd_smi/ && rm -rf /root/.cache
 
 # Add non-root user
 ARG USERNAME=user

@@ -1,0 +1,26 @@
+diff --git a/Makefile b/Makefile
+index 5d7940aa..67760642 100644
+--- a/Makefile
++++ b/Makefile
+@@ -261,7 +261,7 @@ else ifeq ($(BACKEND),hip)
+     ## Suggestion by Mark (from SLATE)
+     # Valid architecture numbers
+     # TODO: remove veryold ones?
+-    VALID_GFXS = 600 601 602 700 701 702 703 704 705 801 802 803 805 810 900 902 904 906 908 909 90a 940 941 942 90c 1010 1011 1012 1030 1031 1032 1033
++    VALID_GFXS = 600 601 602 700 701 702 703 704 705 801 802 803 805 810 900 902 904 906 908 909 90a 940 941 942 90c 1010 1011 1012 1030 1031 1032 1033 1101
+ 
+ 
+ 	# Generated GFX option
+diff --git a/make.inc-examples/make.inc.hip-gcc-mkl b/make.inc-examples/make.inc.hip-gcc-mkl
+index 9bca04de..5f5565be 100644
+--- a/make.inc-examples/make.inc.hip-gcc-mkl
++++ b/make.inc-examples/make.inc.hip-gcc-mkl
+@@ -79,7 +79,7 @@ else ifeq ($(BACKEND),hip)
+     # note: provided by LLVM, so not technically from the vendor.
+     # Here's ROCm's source: https://rocm.github.io/hardware.html , but it is
+     # not specific enough. TODO: find better link?
+-    GPU_TARGET ?= gfx900 gfx906 gfx908
++    GPU_TARGET ?= gfx1101
+ endif
+ 
+ # Use -fPIC to make shared (.so) and static (.a) library;
