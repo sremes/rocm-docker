@@ -1,24 +1,24 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=6.1.1
-ARG AMDGPU_VERSION=6.1.1
+ARG ROCM_VERSION=6.3.2
+ARG AMDGPU_VERSION=6.3.2
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gnupg \
     && curl -sL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/rocm.gpg \
-    && echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/$ROCM_VERSION jammy main" | tee /etc/apt/sources.list.d/rocm.list \
-    && echo "deb [arch=amd64] https://repo.radeon.com/amdgpu/$AMDGPU_VERSION/ubuntu jammy main" | tee /etc/apt/sources.list.d/amdgpu.list \
+    && echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/$ROCM_VERSION noble main" | tee /etc/apt/sources.list.d/rocm.list \
+    && echo "deb [arch=amd64] https://repo.radeon.com/amdgpu/$AMDGPU_VERSION/ubuntu noble main" | tee /etc/apt/sources.list.d/amdgpu.list \
     && DEBIAN_FRONTEND=noninteractive apt-get --purge -y autoremove \
     && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends  \
     build-essential rocm-dev rocm-libs rocm-utils rccl rocprofiler-dev roctracer-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install python and git + other tools
-ARG PYTHON_VERSION=python3.11
+ARG PYTHON_VERSION=python3.12
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
+#    && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${PYTHON_VERSION} ${PYTHON_VERSION}-venv ${PYTHON_VERSION}-dev \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -51,7 +51,7 @@ ARG ROCM_TARGET=gfx1101
 
 # Compile and install magma
 COPY magma_add_gfx1101.patch /opt
-RUN cd /opt && git clone https://bitbucket.org/icl/magma.git \
+RUN cd /opt && git clone https://github.com/icl-utk-edu/magma.git \
     && cd magma \
     && git apply /opt/magma_add_gfx1101.patch \
     && cp make.inc-examples/make.inc.hip-gcc-mkl make.inc \
@@ -68,6 +68,7 @@ RUN cd /opt && git clone https://bitbucket.org/icl/magma.git \
 ENV USE_LLVM=/opt/rocm/llvm
 ENV LLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm
 ENV PYTORCH_ROCM_ARCH="gfx1101"
+ENV TARGET_GPUS="Navi32"
 ENV ROCM_PATH /opt/rocm
 ENV MAGMA_HOME /opt/rocm/magma
 RUN pip install --no-cache-dir -U wheel setuptools
@@ -100,6 +101,7 @@ RUN pip install --no-cache-dir \
     git+https://github.com/Lightning-AI/lightning.git \
     transformers peft accelerate datasets diffusers \
     scipy tensorboard pandas matplotlib ipython pytest black \
+    einops \
     && rm -rf /root/.cache
 
 # Build Triton
@@ -127,7 +129,7 @@ RUN pip install /opt/rocm/share/amd_smi/ && rm -rf /root/.cache
 ARG USERNAME=user
 ARG USER_UID=1000
 ARG USER_GID=100
-RUN groupadd -f --gid $USER_GID $USERNAME \
+RUN deluser --remove-home ubuntu && groupadd -f --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME

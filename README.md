@@ -1,10 +1,9 @@
 # rocm-docker
 
-Docker image based on Ubuntu 22.04 that contains
-- ROCm from AMD repos
+Build a Docker image based on Ubuntu 24.04 that contains
+- ROCm from official AMD repos
 - Python 3.12 (from deadsnakes/ppa)
-- PyTorch compiled from source (from gitmaster branch)
-- Transformers, PEFT, etc. (from git)
-- Modified fork of bitsandbytes for ROCm
+- PyTorch compiled from source (from git master branch)
+- Transformers, PEFT, bitsandbytes etc.
 
-By default, sets the device to gfx1100 (i.e. compatible with 7800XT/7900XTX).
+By default, sets the device to gfx1101 (i.e. compatible with 7800XT).
