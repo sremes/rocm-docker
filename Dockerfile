@@ -1,8 +1,8 @@
 FROM ubuntu:24.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=6.3.2
-ARG AMDGPU_VERSION=6.3.2
+ARG ROCM_VERSION=6.3.4
+ARG AMDGPU_VERSION=6.3.4
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
@@ -20,7 +20,7 @@ ARG PYTHON_VERSION=python3.12
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common \
 #    && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${PYTHON_VERSION} ${PYTHON_VERSION}-venv ${PYTHON_VERSION}-dev \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends liblzma-dev pkg-config openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Intel MKL
@@ -32,6 +32,7 @@ RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRO
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Setup virtual environment
+ENV LANG=C.UTF-8
 SHELL ["/bin/bash", "-c"]
 ENV VIRTUAL_ENV=/opt/venv
 RUN ${PYTHON_VERSION} -m venv $VIRTUAL_ENV
@@ -42,13 +43,6 @@ RUN pip install -U pip
 ENV HSA_OVERRIDE_GFX_VERSION=11.0.1
 ARG ROCM_TARGET=gfx1101
 
-# Install pytorch (nightly) - remove supplied rocm libraries and force torch and triton to use system versions
-#RUN pip install --no-cache-dir --pre torch --index-url https://download.pytorch.org/whl/nightly/rocm6.0 \
-#    && rm -rf /opt/venv/lib/${PYTHON_VERSION}/site-packages/torch/lib/{libMIOpen.so,libamd*,libdrm*,libhip*,libhsa-runtime64.so,libr*,rocblas,libelf.so,libgomp.so,libnuma.so} \
-#    && rm -rf /opt/venv/lib/${PYTHON_VERSION}/site-packages/triton/third_party/hip/lib/{libamd*,libdrm*,libhsa-runtime64.so,libnuma.so,libelf.so} 
-#RUN ln -sf /opt/rocm/lib/libamdhip64.so /opt/venv/lib/${PYTHON_VERSION}/site-packages/triton/third_party/hip/lib/ \
-#RUN ln -sf /usr/lib/x86_64-linux-gnu/libgomp.so.1 /opt/venv/lib/${PYTHON_VERSION}/site-packages/torch/lib/libgomp.so
-
 # Compile and install magma
 COPY magma_add_gfx1101.patch /opt
 RUN cd /opt && git clone https://github.com/icl-utk-edu/magma.git \
@@ -58,7 +52,6 @@ RUN cd /opt && git clone https://github.com/icl-utk-edu/magma.git \
     && echo 'LIBDIR += -L$(MKLROOT)/lib' | tee -a make.inc \
     && echo 'LIB += -Wl,--enable-new-dtags -Wl,--rpath,/opt/rocm/lib -Wl,--rpath,$(MKLROOT)/lib -Wl,--rpath,/opt/rocm/magma/lib' | tee -a make.inc \
     && echo 'DEVCCFLAGS += --gpu-max-threads-per-block=256' | tee -a make.inc \
-#    && echo 'DEVCCFLAGS += --offload-arch=$(ROCM_TARGET)' | tee -a make.inc \
     && sed -i 's/^FOPENMP/#FOPENMP/g' make.inc \
     && make -f make.gen.hipMAGMA -j $(nproc) \
     && LANG=C.UTF-8 make lib/libmagma.so -j $(nproc) MKLROOT=${MKLROOT} \
@@ -69,8 +62,12 @@ ENV USE_LLVM=/opt/rocm/llvm
 ENV LLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm
 ENV PYTORCH_ROCM_ARCH="gfx1101"
 ENV TARGET_GPUS="Navi32"
-ENV ROCM_PATH /opt/rocm
-ENV MAGMA_HOME /opt/rocm/magma
+ENV ROCM_PATH=/opt/rocm
+ENV MAGMA_HOME=/opt/rocm/magma
+ENV BUILD_TEST=0
+ENV USE_FLASH_ATTENTION=0
+ENV USE_MEM_EFF_ATTENTION=0
+ENV USE_DISTRIBUTED=0
 RUN pip install --no-cache-dir -U wheel setuptools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN cd /opt && git clone https://github.com/pytorch/pytorch.git && cd pytorch && pip install -r requirements.txt
@@ -81,7 +78,7 @@ RUN cd /opt/pytorch && python tools/amd_build/build_amd.py \
 RUN cd /opt && git clone https://github.com/ROCm/bitsandbytes.git \
     && cd bitsandbytes && git checkout rocm_enabled \
     && cmake -DCOMPUTE_BACKEND=hip -DBNB_ROCM_ARCH=${ROCM_TARGET} -S . \
-    && make -j8 && pip install .
+    && make -j $(nproc) && pip install .
 
 # Install tokenizers
 ENV PATH="$HOME/.cargo/bin:$PATH"
