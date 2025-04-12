@@ -1,8 +1,8 @@
 FROM ubuntu:24.04
 
 # Register the ROCM package repository, and install rocm-dev package
-ARG ROCM_VERSION=6.3.4
-ARG AMDGPU_VERSION=6.3.4
+ARG ROCM_VERSION=6.4
+ARG AMDGPU_VERSION=6.4
 
 COPY 90-rocm-pin /etc/apt/preferences.d/rocm-pin-600
 RUN apt-get update \
@@ -12,15 +12,14 @@ RUN apt-get update \
     && echo "deb [arch=amd64] https://repo.radeon.com/amdgpu/$AMDGPU_VERSION/ubuntu noble main" | tee /etc/apt/sources.list.d/amdgpu.list \
     && DEBIAN_FRONTEND=noninteractive apt-get --purge -y autoremove \
     && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends  \
-    build-essential rocm-dev rocm-libs rocm-utils rccl rocprofiler-dev roctracer-dev \
+    build-essential rocm-dev rocm-libs rocm-utils rocprofiler-dev roctracer-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install python and git + other tools
 ARG PYTHON_VERSION=python3.12
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common \
-#    && add-apt-repository ppa:deadsnakes/ppa && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${PYTHON_VERSION} ${PYTHON_VERSION}-venv ${PYTHON_VERSION}-dev \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends liblzma-dev pkg-config openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build liblzma-dev pkg-config openssh-client git less sudo vim unzip wget curl cmake autoconf automake libatlas-base-dev gfortran jq libjpeg-dev libpng-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Intel MKL
@@ -42,6 +41,9 @@ RUN pip install -U pip
 # Select and enforce the ROCm gfx version
 ENV HSA_OVERRIDE_GFX_VERSION=11.0.1
 ARG ROCM_TARGET=gfx1101
+
+# Install amd-smi tool, needed by pytorch/triton
+RUN pip install /opt/rocm/share/amd_smi/ && rm -rf /root/.cache
 
 # Compile and install magma
 COPY magma_add_gfx1101.patch /opt
@@ -69,16 +71,9 @@ ENV USE_FLASH_ATTENTION=0
 ENV USE_MEM_EFF_ATTENTION=0
 ENV USE_DISTRIBUTED=0
 RUN pip install --no-cache-dir -U wheel setuptools
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN cd /opt && git clone https://github.com/pytorch/pytorch.git && cd pytorch && pip install -r requirements.txt
 RUN cd /opt/pytorch && python tools/amd_build/build_amd.py \
     && python setup.py bdist_wheel && pip install --no-index --no-deps "$(echo dist/*.whl)" && rm dist/*.whl
-
-# Compile and install bitsandbytes for ROCm
-RUN cd /opt && git clone https://github.com/ROCm/bitsandbytes.git \
-    && cd bitsandbytes && git checkout rocm_enabled \
-    && cmake -DCOMPUTE_BACKEND=hip -DBNB_ROCM_ARCH=${ROCM_TARGET} -S . \
-    && make -j $(nproc) && pip install .
 
 # Install tokenizers
 ENV PATH="$HOME/.cargo/bin:$PATH"
@@ -90,11 +85,6 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y \
 
 # And finally all other relevant libraries
 RUN pip install --no-cache-dir \
-    #git+https://github.com/huggingface/transformers \
-    #git+https://github.com/huggingface/peft \
-    #git+https://github.com/huggingface/accelerate.git \
-    #git+https://github.com/huggingface/datasets.git \
-    #git+https://github.com/huggingface/diffusers.git \
     git+https://github.com/Lightning-AI/lightning.git \
     transformers peft accelerate datasets diffusers \
     scipy tensorboard pandas matplotlib ipython pytest black \
@@ -102,25 +92,24 @@ RUN pip install --no-cache-dir \
     && rm -rf /root/.cache
 
 # Build Triton
-#RUN cd /opt && git clone https://github.com/ROCm/triton.git \
-#    && cd triton/python && pip install -e . && rm -rf /root/.cache
 RUN cd /opt && git clone https://github.com/triton-lang/triton.git \
     && cd triton && pip install -e python && rm -rf /root/.cache
-
-# Build Flash-Attention
-#ENV GPU_ARCHS="gfx1101"
-#COPY patch_flash_attn_arch.patch /opt
-#RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git \
-#    && cd flash-attention && git checkout howiejay/navi_support \
-#    && git apply /opt/patch_flash_attn_arch.patch \
-#    && pip install -e . && rm -rf /root/.cache
 
 # Build also torchvision
 RUN cd /opt && git clone https://github.com/pytorch/vision.git \
     && cd vision && python setup.py install && rm -rf /root/.cache
 
-# Install amd-smi tool, needed by pytorch/triton
-RUN pip install /opt/rocm/share/amd_smi/ && rm -rf /root/.cache
+# Flash-Attention with AMD Triton kernels
+ENV GPU_ARCHS="gfx1101"
+ENV FLASH_ATTENTION_TRITON_AMD_ENABLE="TRUE"
+RUN cd /opt && git clone --recursive https://github.com/ROCm/flash-attention.git -b main_perf \
+    && cd flash-attention \
+    && pip install --no-build-isolation -e . && rm -rf /root/.cache
+
+# Compile and install bitsandbytes for ROCm
+RUN git clone -b multi-backend-refactor https://github.com/bitsandbytes-foundation/bitsandbytes.git \
+    && cd bitsandbytes/  && cmake -DCOMPUTE_BACKEND=hip -DAMDGPU_TARGETS="gfx1101" -DBNB_ROCM_ARCH="gfx1101" -S . \
+    && make -j $(nproc) && pip install -v -e .
 
 # Add non-root user
 ARG USERNAME=user
